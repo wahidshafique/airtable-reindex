@@ -1,19 +1,41 @@
 import {
   initializeBlock,
   useCursor,
+  FieldPickerSynced,
   Heading,
-  Input,
   Button,
   Text,
+  useGlobalConfig,
   Box,
   Label,
 } from "@airtable/blocks/ui";
 import { base } from "@airtable/blocks";
 import React, { useState, useEffect } from "react";
+import Table from "@airtable/blocks/dist/types/src/models/table";
 
-const reindex = async ({ table, view, indexName }) => {
-  let result = await view.selectRecordsAsync({
-    fields: [table.getField(indexName), table.getField("Status")],
+const reindex = async ({
+  table,
+  indexName,
+  excludeFields = null,
+}: {
+  table: Table;
+  indexName: string;
+  excludeFields: {
+    fieldName: string;
+    exclusionCriteria: {
+      is?: string;
+      includes?: string;
+      // possibly more can be created as need arises
+    };
+  }[];
+}): Promise<void> => {
+  const excludedFieldNames =
+    excludeFields?.map((e) => table.getField(e.fieldName)) || [];
+  console.log(34554, excludedFieldNames);
+
+  // get the index field along with any ones that we want to skip for indexing
+  let result = await table.selectRecordsAsync({
+    fields: [table.getField(indexName), ...excludedFieldNames],
   });
 
   let i = 0,
@@ -22,9 +44,14 @@ const reindex = async ({ table, view, indexName }) => {
 
   while (i < len) {
     const record = result.records[i];
-    // TODO: doit
-    const statusValue = record.getCellValue("Status");
-    const isValid = statusValue && statusValue.name === "Approved For Game";
+    // go over all of our values, if no exclusion criteria, assume its valid
+    const isValid = excludeFields
+      ? excludeFields.reduce((acc, e) => {
+          const val = record.getCellValueAsString(e.fieldName);
+          console.log(234234, val);
+          return acc;
+        }, false)
+      : true;
 
     const cellIndex = record.getCellValue(indexName);
 
@@ -40,58 +67,57 @@ const reindex = async ({ table, view, indexName }) => {
     const expectedIndex = i - discardedRows;
 
     if (record && isValid && cellIndex !== expectedIndex) {
-      // we dont want this to run when the indices are matched, save a few millisecs
+      // we don't want this to run when the indices are matched, save a few ms
       await table.updateRecordAsync(record, {
         [indexName]: expectedIndex,
       });
     }
   }
+  return null;
 };
 
-const DEFAULT_INDEX_NAME = "Index";
-
 function App() {
-  const [hasChosenValidField, setHasChosenValidField] = useState(false);
-  const [indexFieldNameValue, setIndexFieldNameValue] =
-    useState(DEFAULT_INDEX_NAME);
+  const globalConfig = useGlobalConfig();
   const cursor = useCursor();
   const table = base.getTableById(cursor.activeTableId);
-  const viewid = cursor.activeViewId;
+  const [isValidIndexField, setIsValidIndexField] = useState(false);
+  const indexFieldGlobalConfigKey = table.id + "_index_key";
+  const indexFieldId = globalConfig.get(indexFieldGlobalConfigKey) || "";
 
   useEffect(() => {
-    const indexFieldCheck =
-      table.getFieldByNameIfExists(indexFieldNameValue) !== null;
-    console.log(indexFieldCheck);
-    setHasChosenValidField(indexFieldCheck);
-  }, [indexFieldNameValue, table]);
+    setIsValidIndexField(
+      table.getFieldByIdIfExists(indexFieldId)?.type === "number"
+    );
+  }, [indexFieldId, table]);
 
   return (
     <Box padding={3}>
-      <Heading marginBottom={3} size="large">
+      <Heading marginBottom={2} size="large">
         Active table: {table.name}
-        <Text>
-          Click reindex to update a field that matches the natural order of
-          rows. By default we will try to find a field called: $
-          {DEFAULT_INDEX_NAME}, but you can pick whatever you want
-        </Text>
       </Heading>
+      <Text marginBottom={4}>
+        Click Reindex to update a field so that it matches the natural ascending
+        (1,2,3..) order of rows. The order is independent of any view or filter.
+      </Text>
 
-      <Box marginY={2}>
+      <Box marginY={2} flexDirection="column">
         <Label htmlFor="my-input">Index Field</Label>
-        <Input
-          id="my-input"
-          value={indexFieldNameValue}
-          onChange={(e) => setIndexFieldNameValue(e.target.value)}
-        />
+        <Box>
+          <FieldPickerSynced
+            globalConfigKey={indexFieldGlobalConfigKey}
+            allowedTypes={["number"]}
+            table={table}
+            width="320px"
+          />
+        </Box>
       </Box>
-
       <Button
-        disabled={!hasChosenValidField}
+        disabled={!isValidIndexField}
         onClick={() =>
           reindex({
             table,
-            view: table.getViewById(viewid),
-            indexName: indexFieldNameValue,
+            indexName: globalConfig.get(indexFieldGlobalConfigKey),
+            // excludeFields:
           })
         }
         size="large"
@@ -99,12 +125,6 @@ function App() {
       >
         Reindex
       </Button>
-      {!hasChosenValidField && (
-        <Text marginY={2} textColor="tomato">
-          {indexFieldNameValue} is not defined and cannot be reindexed. Please
-          create a Number field with that name.
-        </Text>
-      )}
     </Box>
   );
 }
