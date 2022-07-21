@@ -1,4 +1,6 @@
 import {
+  Tooltip,
+  SwitchSynced,
   initializeBlock,
   useCursor,
   FieldPickerSynced,
@@ -7,82 +9,38 @@ import {
   Text,
   useGlobalConfig,
   Box,
+  useSynced,
   Label,
 } from "@airtable/blocks/ui";
 import { base } from "@airtable/blocks";
 import React, { useState, useEffect } from "react";
-import Table from "@airtable/blocks/dist/types/src/models/table";
-
-const reindex = async ({
-  table,
-  indexName,
-  excludeFields = null,
-}: {
-  table: Table;
-  indexName: string;
-  excludeFields: {
-    fieldName: string;
-    exclusionCriteria: {
-      is?: string;
-      includes?: string;
-      // possibly more can be created as need arises
-    };
-  }[];
-}): Promise<void> => {
-  const excludedFieldNames =
-    excludeFields?.map((e) => table.getField(e.fieldName)) || [];
-  console.log(34554, excludedFieldNames);
-
-  // get the index field along with any ones that we want to skip for indexing
-  let result = await table.selectRecordsAsync({
-    fields: [table.getField(indexName), ...excludedFieldNames],
-  });
-
-  let i = 0,
-    len = result.records.length;
-  let discardedRows = 0;
-
-  while (i < len) {
-    const record = result.records[i];
-    // go over all of our values, if no exclusion criteria, assume its valid
-    const isValid = excludeFields
-      ? excludeFields.reduce((acc, e) => {
-          const val = record.getCellValueAsString(e.fieldName);
-          console.log(234234, val);
-          return acc;
-        }, false)
-      : true;
-
-    const cellIndex = record.getCellValue(indexName);
-
-    if (!isValid) {
-      // set our index to zero, as it will never be used
-      await table.updateRecordAsync(record, {
-        [indexName]: 0,
-      });
-      discardedRows += 1;
-    }
-
-    i += 1;
-    const expectedIndex = i - discardedRows;
-
-    if (record && isValid && cellIndex !== expectedIndex) {
-      // we don't want this to run when the indices are matched, save a few ms
-      await table.updateRecordAsync(record, {
-        [indexName]: expectedIndex,
-      });
-    }
-  }
-  return null;
-};
+import reindex, { ExcludeField } from "./reindex";
+import FieldExcluder from "./fieldExcluder";
 
 function App() {
   const globalConfig = useGlobalConfig();
   const cursor = useCursor();
   const table = base.getTableById(cursor.activeTableId);
   const [isValidIndexField, setIsValidIndexField] = useState(false);
+
   const indexFieldGlobalConfigKey = table.id + "_index_key";
-  const indexFieldId = globalConfig.get(indexFieldGlobalConfigKey) || "";
+  const indexFieldId =
+    (globalConfig.get(indexFieldGlobalConfigKey) as string) || "";
+
+  const excludedFieldsToggleGlobalConfigKey =
+    table.id + "_excluded_fields_toggle_key";
+  const excludedFieldsToggle =
+    globalConfig.get(excludedFieldsToggleGlobalConfigKey) || "";
+
+  const excludedFieldsGlobalConfigKey = table.id + "_excluded_fields";
+  const [excludedFieldsRawVal, setExcludedFieldsRawVal, canSetExcludedFields] =
+    useSynced(excludedFieldsGlobalConfigKey);
+
+  const excludedFields = excludedFieldsRawVal
+    ? (JSON.parse(excludedFieldsRawVal as string) as ExcludeField[])
+    : [];
+
+  console.log("stored exclusion fields", excludedFields);
 
   useEffect(() => {
     setIsValidIndexField(
@@ -96,10 +54,18 @@ function App() {
         Active table: {table.name}
       </Heading>
       <Text marginBottom={4}>
-        Click Reindex to update a field so that it matches the natural ascending
-        (1,2,3..) order of rows. The order is independent of any view or filter.
+        Click Reindex to update a{" "}
+        <Tooltip
+          content="This field must be of type 'number'"
+          placementX={Tooltip.placements.CENTER}
+          placementY={Tooltip.placements.TOP}
+          shouldHideTooltipOnClick={true}
+        >
+          <Button>field</Button>
+        </Tooltip>{" "}
+        so that it matches the natural ascending (1,2,3..) order of rows. The
+        order is independent of any view or filter.
       </Text>
-
       <Box marginY={2} flexDirection="column">
         <Label htmlFor="my-input">Index Field</Label>
         <Box>
@@ -107,17 +73,35 @@ function App() {
             globalConfigKey={indexFieldGlobalConfigKey}
             allowedTypes={["number"]}
             table={table}
-            width="320px"
           />
         </Box>
+      </Box>
+      <Box marginTop={2} marginBottom={3}>
+        <SwitchSynced
+          globalConfigKey={excludedFieldsToggleGlobalConfigKey}
+          label="Should Exclude Items?"
+        />
+        {excludedFieldsToggle && (
+          <FieldExcluder
+            table={table}
+            excludedFields={excludedFields}
+            setGlobalExcludes={(e: ExcludeField[]) => {
+              console.log("filed to exclude set", e);
+              if (canSetExcludedFields) {
+                setExcludedFieldsRawVal(JSON.stringify(e));
+              }
+            }}
+          />
+        )}
       </Box>
       <Button
         disabled={!isValidIndexField}
         onClick={() =>
           reindex({
             table,
-            indexName: globalConfig.get(indexFieldGlobalConfigKey),
-            // excludeFields:
+            indexName: globalConfig.get(indexFieldGlobalConfigKey) as string,
+            excludeFields:
+              excludedFieldsToggle && excludedFields ? excludedFields : [],
           })
         }
         size="large"
@@ -125,6 +109,7 @@ function App() {
       >
         Reindex
       </Button>
+      {/* <Fiedld */}
     </Box>
   );
 }
