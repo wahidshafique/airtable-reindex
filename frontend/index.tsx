@@ -13,7 +13,7 @@ import {
   Label,
 } from "@airtable/blocks/ui";
 import { base } from "@airtable/blocks";
-import React, { useState, useEffect } from "react";
+import React from "react";
 import reindex, { ExcludeField } from "./reindex";
 import FieldExcluder from "./fieldExcluder";
 
@@ -23,9 +23,7 @@ function App() {
   const table = base.getTableById(cursor.activeTableId);
 
   const indexFieldGlobalConfigKey = table.id + "_index_key";
-  const [indexField, setIndexField, canSetIndexField] = useSynced(
-    indexFieldGlobalConfigKey
-  );
+  const [indexField] = useSynced(indexFieldGlobalConfigKey);
 
   const excludedFieldsToggleGlobalConfigKey =
     table.id + "_excluded_fields_toggle_key";
@@ -39,8 +37,6 @@ function App() {
   const excludedFields = excludedFieldsRawVal
     ? (JSON.parse(excludedFieldsRawVal as string) as ExcludeField[])
     : [];
-
-  console.log("stored exclusion fields", excludedFields);
 
   return (
     <Box padding={3}>
@@ -81,7 +77,6 @@ function App() {
               table={table}
               excludedFields={excludedFields}
               setGlobalExcludes={(e: ExcludeField[]) => {
-                console.log("filed to exclude set", e);
                 if (canSetExcludedFields) {
                   setExcludedFieldsRawVal(JSON.stringify(e));
                 }

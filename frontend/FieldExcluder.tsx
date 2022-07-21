@@ -1,16 +1,9 @@
 import Table from "@airtable/blocks/dist/types/src/models/table";
 import {
-  Tooltip,
-  SwitchSynced,
-  initializeBlock,
-  useCursor,
   FieldPicker,
-  Heading,
   Input,
   Button,
   SelectButtons,
-  Text,
-  useGlobalConfig,
   Box,
   Label,
 } from "@airtable/blocks/ui";
@@ -41,6 +34,7 @@ export default function FieldExcluder({
   return (
     <Box>
       {excludedFields.map((excludedField, index) => {
+        // helper to make global set easier
         const findAndSetGlobalExcludeList = (
           newFields: Partial<ExcludeField>
         ) =>
@@ -55,6 +49,7 @@ export default function FieldExcluder({
               return e;
             })
           );
+
         return (
           <Box
             key={excludedField.fieldId + index}
@@ -83,6 +78,7 @@ export default function FieldExcluder({
                     ? table.getFieldByIdIfExists(excludedField?.fieldId)
                     : ""
                 }
+                // TODO: figure out how to import enum without error
                 allowedTypes={[
                   "singleLineText",
                   "email",
@@ -138,7 +134,7 @@ export default function FieldExcluder({
       <Box style={{ float: "right", margin: 2 }}>
         <Button
           onClick={() => {
-            // introduce a dummy data field
+            // introduce a dummy data field, if you submit with this it'll throw an error
             setGlobalExcludes([
               ...excludedFields,
               {

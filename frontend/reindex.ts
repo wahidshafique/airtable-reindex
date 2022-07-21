@@ -18,17 +18,16 @@ const reindex = async ({
   indexName: string;
   excludeFields?: ExcludeField[];
 }): Promise<void> => {
-  const excludedFieldNames =
+  const excludedFieldIds =
     excludeFields?.map((e) => table.getFieldByIdIfExists(e.fieldId)) || [];
-  console.log("excluded field names", excludedFieldNames);
 
-  // get the index field along with any ones that we want to skip for indexing
+  // get the index field along with any field ids that we want to skip for indexing
   let result = await table.selectRecordsAsync({
-    fields: [table.getField(indexName), ...excludedFieldNames],
+    fields: [table.getField(indexName), ...excludedFieldIds],
   });
 
-  let i = 0,
-    len = result.records.length;
+  let i = 0;
+  let len = result.records.length;
   let discardedRows = 0;
 
   while (i < len) {
@@ -37,7 +36,7 @@ const reindex = async ({
     const isValid = excludeFields
       ? excludeFields.reduce((acc, e) => {
           const val = record.getCellValueAsString(e.fieldId);
-          // if we meet the criteria, its an instant flag as false
+          // if we meet the criteria, its an instant flag as false, and we'll mark it as 0
           if (acc) {
             if (e.exclusionCriteria.type === "is") {
               return e.exclusionCriteria.value !== val;
