@@ -1,9 +1,10 @@
 import Table from "@airtable/blocks/dist/types/src/models/table";
 
+export type ExclusionCriteriaTypes = "is" | "includes";
 export interface ExcludeField {
-  fieldName: string;
+  fieldId: string;
   exclusionCriteria: {
-    type: "is" | "includes";
+    type: ExclusionCriteriaTypes;
     value: string;
   };
 }
@@ -18,7 +19,7 @@ const reindex = async ({
   excludeFields?: ExcludeField[];
 }): Promise<void> => {
   const excludedFieldNames =
-    excludeFields?.map((e) => table.getField(e.fieldName)) || [];
+    excludeFields?.map((e) => table.getFieldByIdIfExists(e.fieldId)) || [];
   console.log("excluded field names", excludedFieldNames);
 
   // get the index field along with any ones that we want to skip for indexing
@@ -35,14 +36,14 @@ const reindex = async ({
     // go over all of our values, if no exclusion criteria, assume its valid
     const isValid = excludeFields
       ? excludeFields.reduce((acc, e) => {
-          const val = record.getCellValueAsString(e.fieldName);
+          const val = record.getCellValueAsString(e.fieldId);
           // if we meet the criteria, its an instant flag as false
           if (acc) {
             if (e.exclusionCriteria.type === "is") {
-              return e.exclusionCriteria.value === val;
+              return e.exclusionCriteria.value !== val;
             }
             if (e.exclusionCriteria.type === "includes") {
-              return e.exclusionCriteria.value.includes(val);
+              return !val.includes(e.exclusionCriteria.value);
             }
           }
         }, true)

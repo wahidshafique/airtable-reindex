@@ -21,11 +21,11 @@ function App() {
   const globalConfig = useGlobalConfig();
   const cursor = useCursor();
   const table = base.getTableById(cursor.activeTableId);
-  const [isValidIndexField, setIsValidIndexField] = useState(false);
 
   const indexFieldGlobalConfigKey = table.id + "_index_key";
-  const indexFieldId =
-    (globalConfig.get(indexFieldGlobalConfigKey) as string) || "";
+  const [indexField, setIndexField, canSetIndexField] = useSynced(
+    indexFieldGlobalConfigKey
+  );
 
   const excludedFieldsToggleGlobalConfigKey =
     table.id + "_excluded_fields_toggle_key";
@@ -41,12 +41,6 @@ function App() {
     : [];
 
   console.log("stored exclusion fields", excludedFields);
-
-  useEffect(() => {
-    setIsValidIndexField(
-      table.getFieldByIdIfExists(indexFieldId)?.type === "number"
-    );
-  }, [indexFieldId, table]);
 
   return (
     <Box padding={3}>
@@ -76,26 +70,28 @@ function App() {
           />
         </Box>
       </Box>
-      <Box marginTop={2} marginBottom={3}>
-        <SwitchSynced
-          globalConfigKey={excludedFieldsToggleGlobalConfigKey}
-          label="Should Exclude Items?"
-        />
-        {excludedFieldsToggle && (
-          <FieldExcluder
-            table={table}
-            excludedFields={excludedFields}
-            setGlobalExcludes={(e: ExcludeField[]) => {
-              console.log("filed to exclude set", e);
-              if (canSetExcludedFields) {
-                setExcludedFieldsRawVal(JSON.stringify(e));
-              }
-            }}
+      {indexField && (
+        <Box marginTop={2} marginBottom={3}>
+          <SwitchSynced
+            globalConfigKey={excludedFieldsToggleGlobalConfigKey}
+            label="Should Exclude Items?"
           />
-        )}
-      </Box>
+          {excludedFieldsToggle && (
+            <FieldExcluder
+              table={table}
+              excludedFields={excludedFields}
+              setGlobalExcludes={(e: ExcludeField[]) => {
+                console.log("filed to exclude set", e);
+                if (canSetExcludedFields) {
+                  setExcludedFieldsRawVal(JSON.stringify(e));
+                }
+              }}
+            />
+          )}
+        </Box>
+      )}
       <Button
-        disabled={!isValidIndexField}
+        disabled={!indexField}
         onClick={() =>
           reindex({
             table,
@@ -109,7 +105,6 @@ function App() {
       >
         Reindex
       </Button>
-      {/* <Fiedld */}
     </Box>
   );
 }
